@@ -11,7 +11,7 @@ __PACKAGE__->mk_accessors(qw( debug port name path db_uuid tracks ),
                           qw( httpd uri ),
                           # Rendezvous::Publish stuff
                           qw( publisher service ));
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 NAME
 

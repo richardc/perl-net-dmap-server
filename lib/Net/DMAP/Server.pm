@@ -8,7 +8,7 @@ use Net::Rendezvous::Publish;
 use Net::DAAP::DMAP qw( dmap_pack );
 use Sys::Hostname;
 use base 'Class::Accessor::Fast';
-__PACKAGE__->mk_accessors(qw( debug port name path db_uuid tracks
+__PACKAGE__->mk_accessors(qw( debug port name path db_uuid tracks playlists
                               revision waiting_clients poll_interval ),
                           qw( httpd uri ),
                           # Rendezvous::Publish stuff
@@ -44,11 +44,12 @@ looking at Net::DPAP::Server or Net::DAAP::Server.
 sub new {
     my $class = shift;
     my $self = $class->SUPER::new( {
-        db_uuid => '13950142391337751523',
-        revision => 42,
-        tracks => {},
+        db_uuid          => '13950142391337751523',
+        revision        => 42,
+        tracks          => {},
+        playlists       => {},
         waiting_clients => [],
-        poll_interval => 20,
+        poll_interval   => 20,
         @_ } );
     $self->name( ref($self) ." " . hostname . " $$" ) unless $self->name;
     $self->port( $self->default_port ) unless $self->port;
@@ -225,8 +226,7 @@ sub databases {
 }
 
 sub database_items {
-    my ($self, $request, $response) = @_;
-    my $database_id = shift;
+    my ($self, $request, $response, $database_id) = @_;
     my $tracks = $self->_all_tracks;
     $response->content( $self->_dmap_pack(
         [[ 'daap.databasesongs' => [
@@ -239,43 +239,55 @@ sub database_items {
 }
 
 sub database_playlists {
-    my ($self, $request, $response) = @_;
-    my $database_id = shift;
+    my ($self, $request, $response, $database_id) = @_;
 
     my $tracks = $self->_all_tracks;
+    my $playlists = [
+        [ 'dmap.listingitem' => [
+            [ 'dmap.itemid'       => 39 ],
+            [ 'dmap.persistentid' => '13950142391337751524' ],
+            [ 'dmap.itemname'     => $self->name ],
+            [ 'com.apple.itunes.smart-playlist' => 0 ],
+            [ 'dmap.itemcount'    => scalar @$tracks ],
+           ],
+         ],
+        map {
+            [ 'dmap.listingitem' => [
+                [ 'dmap.itemid'       => $_->dmap_itemid ],
+                [ 'dmap.persistentid' => $_->dmap_persistentid ],
+                [ 'dmap.itemname'     => $_->dmap_itemname ],
+                [ 'com.apple.itunes.smart-playlist' => 0 ],
+                [ 'dmap.itemcount'    => scalar @{ $_->items } ],
+               ],
+             ],
+         } values %{ $self->playlists },
+       ];
     $response->content( $self->_dmap_pack(
         [[ 'daap.databaseplaylists' => [
             [ 'dmap.status'              => 200 ],
             [ 'dmap.updatetype'          =>   0 ],
             [ 'dmap.specifiedtotalcount' =>   1 ],
             [ 'dmap.returnedcount'       =>   1 ],
-            [ 'dmap.listing'             => [
-                [ 'dmap.listingitem' => [
-                    [ 'dmap.itemid'       => 39 ],
-                    [ 'dmap.persistentid' => '13950142391337751524' ],
-                    [ 'dmap.itemname'     => $self->name ],
-                    [ 'com.apple.itunes.smart-playlist' => 0 ],
-                    [ 'dmap.itemcount'    => scalar @$tracks ],
-                   ],
-                 ],
-               ],
-             ],
+            [ 'dmap.listing'             => $playlists ],
            ]]] ));
 }
 
 sub playlist_items {
-    my ($self, $request, $response) = @_;
-    my $database_id = shift;
-    my $playlist_id = shift;
+    my ($self, $request, $response, $database_id, $playlist_id) = @_;
 
-    my $tracks = $self->_all_tracks;
+    my $playlist = $self->playlists->{ $playlist_id };
+
+    my $tracks = $self->_all_tracks( $playlist ? @{ $playlist->items } : () );
+    warn "$playlist_id $playlist ".(scalar @$tracks) . " tracks";
+    use YAML;
+    print Dump $tracks if $playlist;
     $response->content( $self->_dmap_pack(
         [[ 'daap.playlistsongs' => [
-            [ 'dmap.status' => 200 ],
-            [ 'dmap.updatetype' => 0 ],
+            [ 'dmap.status'              => 200 ],
+            [ 'dmap.updatetype'          => 0 ],
             [ 'dmap.specifiedtotalcount' => scalar @$tracks ],
             [ 'dmap.returnedcount'       => scalar @$tracks ],
-            [ 'dmap.listing' => $tracks ]
+            [ 'dmap.listing'             => $tracks ]
            ]]] ));
 }
 
@@ -293,11 +305,6 @@ sub item_field {
     }
 
     [ $field => eval { $track->$method() } ]
-}
-
-
-sub response_tracks {
-    my $self = shift;
 }
 
 sub uniq {
@@ -328,11 +335,18 @@ sub _uri_arguments {
 sub _all_tracks {
     my $self = shift;
 
-    # sometimes, all isn't really all (DPAP)
-    my $query = { $self->_uri_arguments }->{query} || '';
-    my @tracks = $query =~ /dmap\.itemid/
-      ? map { $self->tracks->{$_} } $query =~ /dmap\.itemid:(\d+)/g
-      : values %{ $self->tracks };
+    # cheat for playlist support
+    my @tracks;
+    if (@_) {
+        @tracks = @_;
+    }
+    else {
+        # sometimes, all isn't really all (DPAP)
+        my $query = { $self->_uri_arguments }->{query} || '';
+        @tracks = $query =~ /dmap\.itemid/
+          ? map { $self->tracks->{$_} } $query =~ /dmap\.itemid:(\d+)/g
+          : values %{ $self->tracks };
+    }
 
     my @fields = $self->_response_fields;
     my @results;

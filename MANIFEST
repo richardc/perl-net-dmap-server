@@ -6,3 +6,5 @@ META.yml
 Changes
 t/compile.t
 lib/Net/DMAP/Server.pm
+lib/Net/DMAP/Server/Playlist.pm
+lib/Net/DMAP/Server/Track.pm

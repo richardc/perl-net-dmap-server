@@ -13,7 +13,7 @@ __PACKAGE__->mk_accessors(qw( debug port name path db_uuid tracks playlists
                           qw( httpd uri ),
                           # Rendezvous::Publish stuff
                           qw( publisher service ));
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 =head1 NAME
 
@@ -278,9 +278,6 @@ sub playlist_items {
     my $playlist = $self->playlists->{ $playlist_id };
 
     my $tracks = $self->_all_tracks( $playlist ? @{ $playlist->items } : () );
-    warn "$playlist_id $playlist ".(scalar @$tracks) . " tracks";
-    use YAML;
-    print Dump $tracks if $playlist;
     $response->content( $self->_dmap_pack(
         [[ 'daap.playlistsongs' => [
             [ 'dmap.status'              => 200 ],

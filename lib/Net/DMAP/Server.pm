@@ -44,7 +44,7 @@ sub new {
     #print Dump $self;
     $self->httpd( POE::Component::Server::HTTP->new(
         Port => $self->port,
-        ContentHandler => { '/' => sub { $self->handler(@_) } },
+        ContentHandler => { '/' => sub { $self->_handler(@_) } },
        ) );
 
     my $publisher = Net::Rendezvous::Publish->new
@@ -59,10 +59,11 @@ sub new {
     return $self;
 }
 
-sub handler {
+sub _handler {
     my $self = shift;
     my ($request, $response) = @_;
     # always the same
+    $response->code( RC_OK );
     $response->content_type( 'application/x-dmap-tagged' );
 
     local $self->{uri};
@@ -72,7 +73,6 @@ sub handler {
     my $path = $self->uri->path;
     $path =~ s{^/}{};
     if ($path =~ m{^databases/\d+/items/(\d+)\.}) {
-        print "Serving $1";
         $response->content( $self->tracks->{$1}->data );
         return RC_OK;
     }
@@ -173,7 +173,6 @@ sub databases {
            ]]] ));
 }
 
-
 sub database_items {
     my $self = shift;
     my $database_id = shift;
@@ -224,6 +223,62 @@ sub playlist_items {
         [ 'dmap.returnedcount'       => scalar @$tracks ],
         [ 'dmap.listing' => $tracks ]
        ]]] );
+}
+
+
+
+sub item_field {
+    my $self = shift;
+    my $track = shift;
+    my $field = shift;
+
+    (my $method = $field) =~  s{[.-]}{_}g;
+    # kludge
+    if ($field =~ /dpap\.(thumb|hires)/) {
+        $field = 'dpap.picturedata';
+    }
+
+    [ $field => eval { $track->$method() } ]
+}
+
+sub response_tracks {
+    my $self = shift;
+    if ($self->uri =~ /dpap.hires/ && $self->uri =~ /dmap.itemid:(\d+)/) {
+        return $self->tracks->{$1};
+    }
+    return values %{ $self->tracks }
+}
+
+sub uniq {
+    my %seen;
+    return grep { !$seen{$_}++ } @_;
+}
+
+# some things are always present in the listings returned, whether you
+# ask for them or not
+sub always_answer {
+    qw( dmap.itemkind dmap.itemid dmap.itemname );
+}
+
+sub response_fields {
+    my $self = shift;
+
+    my %chunks = map { split /=/, $_, 2 } split /&/, $self->uri->query;
+    my @fields = uniq ($self->always_answer, split /(?:,|%2C)/, $chunks{meta});
+    return @fields;
+}
+
+
+sub _all_tracks {
+    my $self = shift;
+    my @tracks;
+
+    my @fields = $self->response_fields;
+    for my $track ($self->response_tracks) {
+        push @tracks, [ 'dmap.listingitem' => [
+            map { $self->item_field( $track => $_ ) } @fields ] ];
+    }
+    return \@tracks;
 }
 
 

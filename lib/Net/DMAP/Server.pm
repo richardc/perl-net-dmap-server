@@ -62,70 +62,167 @@ sub new {
 sub handler {
     my $self = shift;
     my ($request, $response) = @_;
+    # always the same
+    $response->content_type( 'application/x-dmap-tagged' );
 
     local $self->{uri};
     $self->uri( $request->uri );
     print $request->uri, "\n" if $self->debug;
 
-    my %params = map { split /=/, $_, 2 } split /&/, $self->uri->query;
-    my (undef, $method, @args) = split m{/}, $request->uri->path;
-    $method =~ s/-/_/g; # server-info => server_info
+    my $path = $self->uri->path;
+    $path =~ s{^/}{};
+    if ($path =~ m{^databases/\d+/items/(\d+)\.}) {
+        print "Serving $1";
+        $response->content( $self->tracks->{$1}->data );
+        return RC_OK;
+    }
+    if ($path =~ m{^databases/(\d+)/items}) {
+        $response->content( $self->database_items( $1 ) );
+        return RC_OK;
+    }
+    if ($path =~ m{^databases/(\d+)/containers/(\d+)}) {
+        $response->content( $self->playlist_items( $1, $2 ) );
+        return RC_OK;
+    }
+    if ($path =~ m{^databases/(\d+)/containers}) {
+        $response->content( $self->database_playlists( $1 ) );
+        return RC_OK;
+    }
+    $path =~ s/-/_/g;
 
-    if ($self->can( $method )) {
-        my $res = $self->$method( @args );
-        #print Dump $res;
-        $response->code( $res->code );
-        $response->content( $res->content );
-        $response->content_type( $res->content_type );
+    if ($self->can( $path )) {
+        $self->$path( $response );
         return $response->code;
     }
 
-    print "Can't $method: ". $self->uri;
+    print "Can't handle '$path'\n" if $self->debug;
     $response->code( 500 );
     return 500;
 }
 
-sub _dmap_response {
+
+sub _dmap_pack {
     my $self = shift;
     my $dmap = shift;
-    my $response = HTTP::Response->new( 200 );
-    $response->content_type( 'application/x-dmap-tagged' );
-    $response->content( dmap_pack $dmap );
-    #print Dump $dmap if $self->debug && $self->uri =~/type=photo/;
-    return $response;
+    return dmap_pack $dmap;
 }
 
 
 sub content_codes {
     my $self = shift;
-    $self->_dmap_response( [[ 'dmap.contentcodesresponse' => [
-        [ 'dmap.status'             => 200 ],
-        map { [ 'dmap.dictionary' => [
-            [ 'dmap.contentcodesnumber' => $_->{ID}   ],
-            [ 'dmap.contentcodesname'   => $_->{NAME} ],
-            [ 'dmap.contentcodestype'   => $_->{TYPE} ],
-           ] ] } values %$Net::DAAP::DMAP::Types,
-       ]]] );
+    my $response = shift;
+    $response->content($self->_dmap_pack(
+        [[ 'dmap.contentcodesresponse' => [
+            [ 'dmap.status'             => 200 ],
+            map { [ 'dmap.dictionary' => [
+                [ 'dmap.contentcodesnumber' => $_->{ID}   ],
+                [ 'dmap.contentcodesname'   => $_->{NAME} ],
+                [ 'dmap.contentcodestype'   => $_->{TYPE} ],
+               ] ] } values %$Net::DAAP::DMAP::Types,
+           ]]] ));
 }
 
 sub login {
     my $self = shift;
-    $self->_dmap_response( [[ 'dmap.loginresponse' => [
-        [ 'dmap.status'    => 200 ],
-        [ 'dmap.sessionid' =>  42 ],
-       ]]] );
+    my $response = shift;
+    $response->content( $self->_dmap_pack(
+        [[ 'dmap.loginresponse' => [
+            [ 'dmap.status'    => 200 ],
+            [ 'dmap.sessionid' =>  42 ],
+           ]]] ));
 }
 
-sub logout { HTTP::Response->new( 200 ) }
+sub logout { }
 
 sub update {
     my $self = shift;
-    return HTTP::Response->new( RC_WAIT )
-      if $self->uri =~ m{revision-number=42};
+    my $response = shift;
+    # XXX queue these responses to come back later?
+    if ($self->uri =~ m{revision-number=42}) {
+        $response->code( RC_WAIT );
+        return;
+    }
 
-    $self->_dmap_response( [[ 'dmap.updateresponse' => [
-        [ 'dmap.status'         => 200 ],
-        [ 'dmap.serverrevision' =>  42 ],
+    $response->content( $self->_dmap_pack(
+        [[ 'dmap.updateresponse' => [
+            [ 'dmap.status'         => 200 ],
+            [ 'dmap.serverrevision' =>  42 ],
+           ]]] ));
+}
+
+sub databases {
+    my $self = shift;
+    my $response = shift;
+    $response->content( $self->_dmap_pack(
+        [[ 'daap.serverdatabases' => [
+            [ 'dmap.status' => 200 ],
+            [ 'dmap.updatetype' =>  0 ],
+            [ 'dmap.specifiedtotalcount' =>  1 ],
+            [ 'dmap.returnedcount' => 1 ],
+            [ 'dmap.listing' => [
+                [ 'dmap.listingitem' => [
+                    [ 'dmap.itemid' =>  35 ],
+                    [ 'dmap.persistentid' => '13950142391337751523' ],
+                    [ 'dmap.itemname' => ref $self ],
+                    [ 'dmap.itemcount' => scalar keys %{ $self->tracks } ],
+                    [ 'dmap.containercount' =>  1 ],
+                   ],
+                 ],
+               ],
+             ],
+           ]]] ));
+}
+
+
+sub database_items {
+    my $self = shift;
+    my $database_id = shift;
+    my $tracks = $self->_all_tracks;
+    return $self->_dmap_pack( [[ 'daap.databasesongs' => [
+        [ 'dmap.status' => 200 ],
+        [ 'dmap.updatetype' => 0 ],
+        [ 'dmap.specifiedtotalcount' => scalar @$tracks ],
+        [ 'dmap.returnedcount' => scalar @$tracks ],
+        [ 'dmap.listing' => $tracks ]
+       ]]] );
+}
+
+sub database_playlists {
+    my $self = shift;
+    my $database_id = shift;
+
+    my $tracks = $self->_all_tracks;
+    return $self->_dmap_pack( [[ 'daap.databaseplaylists' => [
+        [ 'dmap.status'              => 200 ],
+        [ 'dmap.updatetype'          =>   0 ],
+        [ 'dmap.specifiedtotalcount' =>   1 ],
+        [ 'dmap.returnedcount'       =>   1 ],
+        [ 'dmap.listing'             => [
+            [ 'dmap.listingitem' => [
+                [ 'dmap.itemid'       => 39 ],
+                [ 'dmap.persistentid' => '13950142391337751524' ],
+                [ 'dmap.itemname'     => ref $self ],
+                [ 'com.apple.itunes.smart-playlist' => 0 ],
+                [ 'dmap.itemcount'    => scalar @$tracks ],
+               ],
+             ],
+           ],
+         ],
+       ]]] );
+}
+
+sub playlist_items {
+    my $self = shift;
+    my $database_id = shift;
+    my $playlist_id = shift;
+
+    my $tracks = $self->_all_tracks;
+    $self->_dmap_pack( [[ 'daap.playlistsongs' => [
+        [ 'dmap.status' => 200 ],
+        [ 'dmap.updatetype' => 0 ],
+        [ 'dmap.specifiedtotalcount' => scalar @$tracks ],
+        [ 'dmap.returnedcount'       => scalar @$tracks ],
+        [ 'dmap.listing' => $tracks ]
        ]]] );
 }
 

@@ -241,12 +241,9 @@ sub item_field {
     [ $field => eval { $track->$method() } ]
 }
 
+
 sub response_tracks {
     my $self = shift;
-    if ($self->uri =~ /dpap.hires/ && $self->uri =~ /dmap.itemid:(\d+)/) {
-        return $self->tracks->{$1};
-    }
-    return values %{ $self->tracks }
 }
 
 sub uniq {
@@ -256,29 +253,40 @@ sub uniq {
 
 # some things are always present in the listings returned, whether you
 # ask for them or not
-sub always_answer {
+sub _always_answer {
     qw( dmap.itemkind dmap.itemid dmap.itemname );
 }
 
-sub response_fields {
+sub _response_fields {
     my $self = shift;
 
-    my %chunks = map { split /=/, $_, 2 } split /&/, $self->uri->query;
-    my @fields = uniq ($self->always_answer, split /(?:,|%2C)/, $chunks{meta});
+    my $meta = { $self->_uri_arguments }->{meta} || '';
+    my @fields = uniq $self->_always_answer, split /(?:,|%2C)/, $meta;
     return @fields;
 }
 
+sub _uri_arguments {
+    my $self = shift;
+    my @chunks = split /&/, $self->uri->query || '';
+    return map { split /=/, $_, 2 } @chunks;
+}
 
 sub _all_tracks {
     my $self = shift;
-    my @tracks;
 
-    my @fields = $self->response_fields;
-    for my $track ($self->response_tracks) {
-        push @tracks, [ 'dmap.listingitem' => [
+    # sometimes, all isn't really all (DPAP)
+    my $query = { $self->_uri_arguments }->{query} || '';
+    my @tracks = $query =~ /dmap\.itemid/
+      ? map { $self->tracks->{$_} } $query =~ /dmap\.itemid:(\d+)/g
+      : values %{ $self->tracks };
+
+    my @fields = $self->_response_fields;
+    my @results;
+    for my $track (@tracks) {
+        push @results, [ 'dmap.listingitem' => [
             map { $self->item_field( $track => $_ ) } @fields ] ];
     }
-    return \@tracks;
+    return \@results;
 }
 
 

@@ -134,20 +134,6 @@ sub find_tracks {
     die "override me";
 }
 
-sub has_changed { 0 }
-
-sub poll_changed {
-    my $self = shift;
-    if ($self->has_changed) {
-        $self->revision( $self->revision + 1 );
-        for my $response (@{ $self->waiting_clients }) {
-            $self->update_answer( undef, $response );
-            $response->continue;
-        }
-        $self->waiting_clients([]);
-    }
-}
-
 sub database_item {
     my ($self, $request, $response) = @_;
     my $id = shift;
@@ -180,12 +166,29 @@ sub logout { }
 
 sub update {
     my ($self, $request, $response) = @_;
-    if ($self->uri =~ m{revision-number=(\d+)} && $1 <= $self->revision) {
+    if ($self->uri =~ m{revision-number=(\d+)} && $1 >= $self->revision) {
+        print "queueing $response\n" if $self->debug;
         push @{ $self->waiting_clients }, $response;
         $response->code( RC_WAIT );
         return;
     }
     $self->update_answer( $request, $response );
+}
+
+sub has_changed { 0 }
+
+sub poll_changed {
+    my $self = shift;
+    if ($self->has_changed) {
+        $self->revision( $self->revision + 1 );
+        for my $response (@{ $self->waiting_clients }) {
+            print "continuing $response\n" if $self->debug;
+            $self->update_answer( undef, $response );
+            $response->code( RC_OK );
+            $response->continue;
+        }
+        $self->waiting_clients([]);
+    }
 }
 
 sub update_answer {

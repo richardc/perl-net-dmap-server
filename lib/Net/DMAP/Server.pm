@@ -5,8 +5,9 @@ use POE::Component::Server::HTTP;
 use Net::Rendezvous::Publish;
 use Net::DAAP::DMAP qw( dmap_pack );
 use base 'Class::Accessor::Fast';
-__PACKAGE__->mk_accessors(qw( debug path tracks port httpd uri publisher service ));
-
+__PACKAGE__->mk_accessors(qw( debug port path tracks httpd uri ),
+                          # Rendezvous::Publish stuff
+                          qw( publisher service ));
 our $VERSION = '0.01';
 
 =head1 NAME
@@ -26,7 +27,6 @@ Net::DMAP::Server - base class for D[A-Z]AP servers
   Net::DZAP::Server - Digital Zebra Access Protocol (iZoo) Server
 
   =cut
-
 
 =head1 DESCRIPTION
 

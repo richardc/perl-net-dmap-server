@@ -74,32 +74,30 @@ sub _handler {
     $self->uri( $request->uri );
     print $request->uri, "\n" if $self->debug;
 
-    my $path = $self->uri->path;
-    $path =~ s{^/}{};
-    if ($path =~ m{^databases/\d+/items/(\d+)\.}) {
-        $response->content( $self->tracks->{$1}->data );
-        return RC_OK;
-    }
-    if ($path =~ m{^databases/(\d+)/items}) {
-        $response->content( $self->database_items( $1 ) );
-        return RC_OK;
-    }
-    if ($path =~ m{^databases/(\d+)/containers/(\d+)}) {
-        $response->content( $self->playlist_items( $1, $2 ) );
-        return RC_OK;
-    }
-    if ($path =~ m{^databases/(\d+)/containers}) {
-        $response->content( $self->database_playlists( $1 ) );
-        return RC_OK;
-    }
-    $path =~ s/-/_/g;
+    # first match wins
+    my @methods = (
+        [ database_item      => qr{^/databases/\d+/items/(\d+)\.} ],
+        [ database_items     => qr{^/databases/(\d+)/items} ],
+        [ playlist_items     => qr{^/databases/(\d+)/containers/(\d+)} ],
+        [ database_playlists => qr{^/databases/(\d+)/containers} ],
+        [ databases          => qr{^/databases} ],
+        [ server_info        => qr{^/server-info} ],
+        [ content_codes      => qr{^/content-codes} ],
+        [ update             => qr{^/update} ],
+        [ login              => qr{^/login} ],
+        [ logout             => qr{^/logout} ],
+       );
 
-    if ($self->can( $path )) {
-        $self->$path( $request, $response );
-        return $response->code;
+    for (@methods) {
+        my ($method, $pattern) = @$_;
+        if (my @matched = ($self->uri->path =~ $pattern)) {
+            #print "dispatching as $method\n" if $self->debug;
+            $self->$method( $request, $response, @matched );
+            return $response->code;
+        }
     }
 
-    print "Can't handle '$path'\n" if $self->debug;
+    print "Can't handle ".$self->uri->path."\n" if $self->debug;
     $response->code( 500 );
     return 500;
 }
@@ -111,6 +109,11 @@ sub _dmap_pack {
     return dmap_pack $dmap;
 }
 
+sub database_item {
+    my ($self, $request, $response) = @_;
+    my $id = shift;
+    $response->content( $self->tracks->{$1}->data );
+}
 
 sub content_codes {
     my ($self, $request, $response) = @_;
@@ -175,55 +178,58 @@ sub databases {
 }
 
 sub database_items {
-    my $self = shift;
+    my ($self, $request, $response) = @_;
     my $database_id = shift;
     my $tracks = $self->_all_tracks;
-    return $self->_dmap_pack( [[ 'daap.databasesongs' => [
-        [ 'dmap.status' => 200 ],
-        [ 'dmap.updatetype' => 0 ],
-        [ 'dmap.specifiedtotalcount' => scalar @$tracks ],
-        [ 'dmap.returnedcount' => scalar @$tracks ],
-        [ 'dmap.listing' => $tracks ]
-       ]]] );
+    $response->content( $self->_dmap_pack(
+        [[ 'daap.databasesongs' => [
+            [ 'dmap.status' => 200 ],
+            [ 'dmap.updatetype' => 0 ],
+            [ 'dmap.specifiedtotalcount' => scalar @$tracks ],
+            [ 'dmap.returnedcount' => scalar @$tracks ],
+            [ 'dmap.listing' => $tracks ]
+           ]]] ));
 }
 
 sub database_playlists {
-    my $self = shift;
+    my ($self, $request, $response) = @_;
     my $database_id = shift;
 
     my $tracks = $self->_all_tracks;
-    return $self->_dmap_pack( [[ 'daap.databaseplaylists' => [
-        [ 'dmap.status'              => 200 ],
-        [ 'dmap.updatetype'          =>   0 ],
-        [ 'dmap.specifiedtotalcount' =>   1 ],
-        [ 'dmap.returnedcount'       =>   1 ],
-        [ 'dmap.listing'             => [
-            [ 'dmap.listingitem' => [
-                [ 'dmap.itemid'       => 39 ],
-                [ 'dmap.persistentid' => '13950142391337751524' ],
-                [ 'dmap.itemname'     => $self->name ],
-                [ 'com.apple.itunes.smart-playlist' => 0 ],
-                [ 'dmap.itemcount'    => scalar @$tracks ],
+    $response->content( $self->_dmap_pack(
+        [[ 'daap.databaseplaylists' => [
+            [ 'dmap.status'              => 200 ],
+            [ 'dmap.updatetype'          =>   0 ],
+            [ 'dmap.specifiedtotalcount' =>   1 ],
+            [ 'dmap.returnedcount'       =>   1 ],
+            [ 'dmap.listing'             => [
+                [ 'dmap.listingitem' => [
+                    [ 'dmap.itemid'       => 39 ],
+                    [ 'dmap.persistentid' => '13950142391337751524' ],
+                    [ 'dmap.itemname'     => $self->name ],
+                    [ 'com.apple.itunes.smart-playlist' => 0 ],
+                    [ 'dmap.itemcount'    => scalar @$tracks ],
+                   ],
+                 ],
                ],
              ],
-           ],
-         ],
-       ]]] );
+           ]]] ));
 }
 
 sub playlist_items {
-    my $self = shift;
+    my ($self, $request, $response) = @_;
     my $database_id = shift;
     my $playlist_id = shift;
 
     my $tracks = $self->_all_tracks;
-    $self->_dmap_pack( [[ 'daap.playlistsongs' => [
-        [ 'dmap.status' => 200 ],
-        [ 'dmap.updatetype' => 0 ],
-        [ 'dmap.specifiedtotalcount' => scalar @$tracks ],
-        [ 'dmap.returnedcount'       => scalar @$tracks ],
-        [ 'dmap.listing' => $tracks ]
-       ]]] );
+    $response->content( $self->_dmap_pack(
+        [[ 'daap.playlistsongs' => [
+            [ 'dmap.status' => 200 ],
+            [ 'dmap.updatetype' => 0 ],
+            [ 'dmap.specifiedtotalcount' => scalar @$tracks ],
+            [ 'dmap.returnedcount'       => scalar @$tracks ],
+            [ 'dmap.listing' => $tracks ]
+           ]]] ));
 }
 
 

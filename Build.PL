@@ -5,6 +5,9 @@ Module::Build->new(
     license     => 'perl',
     requires    => {
         'perl' => 5.006,
+        'POE::Component::Server::HTTP' => 0,
+        'Net::DAAP::DMAP'              => 1.21,
+        'Net::Rendezvous::Publish'     => 0,
     },
     build_requires => {
         'Test::More' => 0,

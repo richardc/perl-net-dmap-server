@@ -38,8 +38,6 @@ looking at Net::DPAP::Server or Net::DAAP::Server.
 
 =cut
 
-use YAML;
-
 sub new {
     my $class = shift;
     my $self = $class->SUPER::new( { tracks => {}, @_ } );

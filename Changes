@@ -1,3 +1,7 @@
+HEAD
+	Threw in some code to handle /update, for when things actually can
+        update (iTunes does, iPhoto doesn't)
+
 0.02	Wednesday 4th August, 2004
 	Advertise our database uuid via Rendezvous - this allows iTunes
 	to remember column layouts (Paul Mison)

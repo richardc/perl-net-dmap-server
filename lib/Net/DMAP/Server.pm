@@ -1,13 +1,15 @@
 package Net::DMAP::Server;
 use strict;
 use warnings;
+use POE;
 use POE::Component::Server::HTTP 0.05; # for keep alive
 use POE::Component::Server::HTTP;
 use Net::Rendezvous::Publish;
 use Net::DAAP::DMAP qw( dmap_pack );
 use Sys::Hostname;
 use base 'Class::Accessor::Fast';
-__PACKAGE__->mk_accessors(qw( debug port name path db_uuid tracks ),
+__PACKAGE__->mk_accessors(qw( debug port name path db_uuid tracks
+                              revision waiting_clients poll_interval ),
                           qw( httpd uri ),
                           # Rendezvous::Publish stuff
                           qw( publisher service ));
@@ -43,7 +45,10 @@ sub new {
     my $class = shift;
     my $self = $class->SUPER::new( {
         db_uuid => '13950142391337751523',
+        revision => 42,
         tracks => {},
+        waiting_clients => [],
+        poll_interval => 20,
         @_ } );
     $self->name( ref($self) ." " . hostname . " $$" ) unless $self->name;
     $self->port( $self->default_port ) unless $self->port;
@@ -64,8 +69,20 @@ sub new {
         txt  => "Database ID=".$self->db_uuid."\x{1}Machine Name=".$self->name,,
        ) );
 
+    POE::Session->create(
+        inline_states => {
+            _start       => sub {
+                $_[KERNEL]->alarm( poll_changed => time + $self->poll_interval );
+            },
+            poll_changed => sub {
+                $self->poll_changed;
+                $_[KERNEL]->yield('_start');
+            },
+        });
+
     return $self;
 }
+
 
 sub _handler {
     my $self = shift;
@@ -113,6 +130,24 @@ sub _dmap_pack {
     return dmap_pack $dmap;
 }
 
+sub find_tracks {
+    die "override me";
+}
+
+sub has_changed { 0 }
+
+sub poll_changed {
+    my $self = shift;
+    if ($self->has_changed) {
+        $self->revision( $self->revision + 1 );
+        for my $response (@{ $self->waiting_clients }) {
+            $self->update_answer( undef, $response );
+            $response->continue;
+        }
+        $self->waiting_clients([]);
+    }
+}
+
 sub database_item {
     my ($self, $request, $response) = @_;
     my $id = shift;
@@ -145,16 +180,21 @@ sub logout { }
 
 sub update {
     my ($self, $request, $response) = @_;
-    # XXX queue these responses to come back later?
-    if ($self->uri =~ m{revision-number=42}) {
+    if ($self->uri =~ m{revision-number=(\d+)} && $1 <= $self->revision) {
+        push @{ $self->waiting_clients }, $response;
         $response->code( RC_WAIT );
         return;
     }
+    $self->update_answer( $request, $response );
+}
+
+sub update_answer {
+    my ($self, $request, $response) = @_;
 
     $response->content( $self->_dmap_pack(
         [[ 'dmap.updateresponse' => [
             [ 'dmap.status'         => 200 ],
-            [ 'dmap.serverrevision' =>  42 ],
+            [ 'dmap.serverrevision' =>  $self->revision ],
            ]]] ));
 }
 

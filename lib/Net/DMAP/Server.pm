@@ -43,6 +43,7 @@ sub new {
     my $class = shift;
     my $self = $class->SUPER::new( { tracks => {}, @_ } );
     $self->name( ref($self) ." " . hostname . " $$" ) unless $self->name;
+    $self->port( $self->default_port ) unless $self->port;
     $self->find_tracks;
     #print Dump $self;
     $self->httpd( POE::Component::Server::HTTP->new(

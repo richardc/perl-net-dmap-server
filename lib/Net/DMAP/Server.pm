@@ -1,6 +1,7 @@
 package Net::DMAP::Server;
 use strict;
 use warnings;
+use POE::Component::Server::HTTP 0.05; # for keep alive
 use POE::Component::Server::HTTP;
 use Net::Rendezvous::Publish;
 use Net::DAAP::DMAP qw( dmap_pack );

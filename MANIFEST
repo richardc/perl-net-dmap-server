@@ -1,0 +1,8 @@
+Build.PL
+MANIFEST
+MANIFEST.SKIP
+Makefile.PL
+META.yml
+Changes
+t/compile.t
+lib/Net/DMAP/Server.pm

@@ -5,7 +5,8 @@ use POE::Component::Server::HTTP;
 use Net::Rendezvous::Publish;
 use Net::DAAP::DMAP qw( dmap_pack );
 use base 'Class::Accessor::Fast';
-__PACKAGE__->mk_accessors(qw( debug port path tracks httpd uri ),
+__PACKAGE__->mk_accessors(qw( debug port name path tracks ),
+                          qw( httpd uri ),
                           # Rendezvous::Publish stuff
                           qw( publisher service ));
 our $VERSION = '0.01';
@@ -40,6 +41,7 @@ looking at Net::DPAP::Server or Net::DAAP::Server.
 sub new {
     my $class = shift;
     my $self = $class->SUPER::new( { tracks => {}, @_ } );
+    $self->name( ref $self . " $$" ) unless $self->name;
     $self->find_tracks;
     #print Dump $self;
     $self->httpd( POE::Component::Server::HTTP->new(
@@ -51,7 +53,7 @@ sub new {
       or die "couldn't make a Responder object";
     $self->publisher( $publisher );
     $self->service( $publisher->publish(
-        name => ref $self,
+        name => $self->name,
         type => '_'.$self->protocol.'._tcp',
         port => $self->port,
        ) );
@@ -163,7 +165,7 @@ sub databases {
                 [ 'dmap.listingitem' => [
                     [ 'dmap.itemid' =>  35 ],
                     [ 'dmap.persistentid' => '13950142391337751523' ],
-                    [ 'dmap.itemname' => ref $self ],
+                    [ 'dmap.itemname' => $self->name ],
                     [ 'dmap.itemcount' => scalar keys %{ $self->tracks } ],
                     [ 'dmap.containercount' =>  1 ],
                    ],
@@ -200,7 +202,7 @@ sub database_playlists {
             [ 'dmap.listingitem' => [
                 [ 'dmap.itemid'       => 39 ],
                 [ 'dmap.persistentid' => '13950142391337751524' ],
-                [ 'dmap.itemname'     => ref $self ],
+                [ 'dmap.itemname'     => $self->name ],
                 [ 'com.apple.itunes.smart-playlist' => 0 ],
                 [ 'dmap.itemcount'    => scalar @$tracks ],
                ],

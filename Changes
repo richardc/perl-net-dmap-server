@@ -1,3 +1,7 @@
+0.02	Wednesday 4th August, 2004
+	Advertise our database uuid via Rendezvous - this allows iTunes
+	to remember column layouts (Paul Mison)
+
 0.01	Tuesday 27th July, 2004
 	initial release
 

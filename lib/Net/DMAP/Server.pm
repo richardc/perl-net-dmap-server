@@ -7,7 +7,7 @@ use Net::Rendezvous::Publish;
 use Net::DAAP::DMAP qw( dmap_pack );
 use Sys::Hostname;
 use base 'Class::Accessor::Fast';
-__PACKAGE__->mk_accessors(qw( debug port name path tracks ),
+__PACKAGE__->mk_accessors(qw( debug port name path db_uuid tracks ),
                           qw( httpd uri ),
                           # Rendezvous::Publish stuff
                           qw( publisher service ));
@@ -41,7 +41,10 @@ looking at Net::DPAP::Server or Net::DAAP::Server.
 
 sub new {
     my $class = shift;
-    my $self = $class->SUPER::new( { tracks => {}, @_ } );
+    my $self = $class->SUPER::new( {
+        db_uuid => '13950142391337751523',
+        tracks => {},
+        @_ } );
     $self->name( ref($self) ." " . hostname . " $$" ) unless $self->name;
     $self->port( $self->default_port ) unless $self->port;
     $self->find_tracks;
@@ -58,6 +61,7 @@ sub new {
         name => $self->name,
         type => '_'.$self->protocol.'._tcp',
         port => $self->port,
+        txt  => "Database ID=".$self->db_uuid."\x{1}Machine Name=".$self->name,,
        ) );
 
     return $self;
@@ -166,7 +170,7 @@ sub databases {
             [ 'dmap.listing' => [
                 [ 'dmap.listingitem' => [
                     [ 'dmap.itemid' =>  35 ],
-                    [ 'dmap.persistentid' => '13950142391337751523' ],
+                    [ 'dmap.persistentid' => $self->db_uuid ],
                     [ 'dmap.itemname' => $self->name ],
                     [ 'dmap.itemcount' => scalar keys %{ $self->tracks } ],
                     [ 'dmap.containercount' =>  1 ],

@@ -1,3 +1,6 @@
+0.04	Tuesday 22nd March, 2005
+	Fixup for serving DPAP to iPhoto 5 (Dieter Mücke)
+
 0.03	Thursday 19th August, 2004
 	Threw in some code to handle /update, for when things actually can
         update (iTunes does, iPhoto doesn't)

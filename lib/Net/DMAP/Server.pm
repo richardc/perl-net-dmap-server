@@ -13,7 +13,7 @@ __PACKAGE__->mk_accessors(qw( debug port name path db_uuid tracks playlists
                           qw( httpd uri ),
                           # Rendezvous::Publish stuff
                           qw( publisher service ));
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 NAME
 
@@ -108,6 +108,7 @@ sub _handler {
         [ update             => qr{^/update} ],
         [ login              => qr{^/login} ],
         [ logout             => qr{^/logout} ],
+        [ ignore             => qr{^/this_request_is_simply_to_send_a_close_connection_header} ],
        );
 
     for (@methods) {
@@ -164,6 +165,8 @@ sub login {
 }
 
 sub logout { }
+
+sub ignore { }
 
 sub update {
     my ($self, $request, $response) = @_;

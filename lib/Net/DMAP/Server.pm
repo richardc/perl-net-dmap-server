@@ -4,6 +4,7 @@ use warnings;
 use POE::Component::Server::HTTP;
 use Net::Rendezvous::Publish;
 use Net::DAAP::DMAP qw( dmap_pack );
+use Sys::Hostname;
 use base 'Class::Accessor::Fast';
 __PACKAGE__->mk_accessors(qw( debug port name path tracks ),
                           qw( httpd uri ),
@@ -37,11 +38,12 @@ looking at Net::DPAP::Server or Net::DAAP::Server.
 
 =cut
 
+use YAML;
 
 sub new {
     my $class = shift;
     my $self = $class->SUPER::new( { tracks => {}, @_ } );
-    $self->name( ref $self . " $$" ) unless $self->name;
+    $self->name( ref($self) ." " . hostname . " $$" ) unless $self->name;
     $self->find_tracks;
     #print Dump $self;
     $self->httpd( POE::Component::Server::HTTP->new(

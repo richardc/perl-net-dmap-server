@@ -95,7 +95,7 @@ sub _handler {
     $path =~ s/-/_/g;
 
     if ($self->can( $path )) {
-        $self->$path( $response );
+        $self->$path( $request, $response );
         return $response->code;
     }
 
@@ -113,8 +113,7 @@ sub _dmap_pack {
 
 
 sub content_codes {
-    my $self = shift;
-    my $response = shift;
+    my ($self, $request, $response) = @_;
     $response->content($self->_dmap_pack(
         [[ 'dmap.contentcodesresponse' => [
             [ 'dmap.status'             => 200 ],
@@ -127,8 +126,7 @@ sub content_codes {
 }
 
 sub login {
-    my $self = shift;
-    my $response = shift;
+    my ($self, $request, $response) = @_;
     $response->content( $self->_dmap_pack(
         [[ 'dmap.loginresponse' => [
             [ 'dmap.status'    => 200 ],
@@ -139,8 +137,7 @@ sub login {
 sub logout { }
 
 sub update {
-    my $self = shift;
-    my $response = shift;
+    my ($self, $request, $response) = @_;
     # XXX queue these responses to come back later?
     if ($self->uri =~ m{revision-number=42}) {
         $response->code( RC_WAIT );
@@ -155,8 +152,8 @@ sub update {
 }
 
 sub databases {
-    my $self = shift;
-    my $response = shift;
+    my ($self, $request, $response) = @_;
+
     $response->content( $self->_dmap_pack(
         [[ 'daap.serverdatabases' => [
             [ 'dmap.status' => 200 ],

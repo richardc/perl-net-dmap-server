@@ -13,7 +13,7 @@ __PACKAGE__->mk_accessors(qw( debug port name path db_uuid tracks playlists
                           qw( httpd uri ),
                           # Rendezvous::Publish stuff
                           qw( publisher service ));
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 =head1 NAME
 
@@ -58,6 +58,7 @@ sub new {
     $self->httpd( POE::Component::Server::HTTP->new(
         Port => $self->port,
         ContentHandler => { '/' => sub { $self->_handler(@_) } },
+        StreamHandler => sub { $self->stream_handler(@_) },
        ) );
 
     my $publisher = Net::Rendezvous::Publish->new
@@ -84,6 +85,10 @@ sub new {
     return $self;
 }
 
+sub stream_handler {
+    my $self = shift;
+    my ($request, $response) = @_;
+}
 
 sub _handler {
     my $self = shift;
@@ -371,7 +376,7 @@ Richard Clamp <richardc@unixbeard.net>
 
 =head1 COPYRIGHT
 
-Copyright 2004 Richard Clamp.  All Rights Reserved.
+Copyright 2004, 2005, 2006 Richard Clamp.  All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
